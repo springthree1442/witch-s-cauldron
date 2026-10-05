@@ -523,3 +523,204 @@ canvas {
     transition: none;
   }
 }
+
+/* ── 화면 방향에 따른 추가 최적화 ── */
+
+.editor-workspace > .canvas-frame {
+  width: min(100%, 520px);
+  margin-inline: auto;
+}
+
+#editor-canvas,
+#preview-canvas,
+#scene-canvas {
+  aspect-ratio: 1;
+}
+
+.canvas-frame {
+  min-width: 0;
+}
+
+.toolbar {
+  min-width: 0;
+}
+
+.toolbar button,
+.actions button {
+  white-space: normal;
+}
+
+#editor-canvas {
+  -webkit-touch-callout: none;
+}
+
+/* 가로 화면: 도구 왼쪽 / 사진 오른쪽 */
+@media (orientation: landscape) and (min-width: 700px) {
+  .app {
+    width: min(100%, 1040px);
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .app-header {
+    margin-bottom: 12px;
+  }
+
+  .app-header h1 {
+    font-size: 28px;
+  }
+
+  .app-header p {
+    margin-top: 3px;
+    font-size: 12px;
+  }
+
+  #editor-section:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(230px, 0.85fr) minmax(0, 1.15fr);
+    column-gap: 20px;
+    align-items: start;
+    padding: 18px;
+  }
+
+  #editor-section > h2,
+  #editor-section > .toolbar,
+  #editor-help,
+  #editor-section > .actions {
+    grid-column: 1;
+  }
+
+  #editor-section > h2 {
+    grid-row: 1;
+  }
+
+  #editor-section > .toolbar:first-of-type {
+    grid-row: 2;
+  }
+
+  #editor-help {
+    grid-row: 3;
+  }
+
+  #editor-tools {
+    grid-row: 4;
+  }
+
+  #editor-section > .toolbar:last-of-type {
+    grid-row: 5;
+  }
+
+  #editor-section > .actions {
+    grid-row: 6;
+  }
+
+  #editor-section .toolbar {
+    margin: 7px 0;
+    gap: 7px;
+  }
+
+  #editor-section button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  #editor-section input[type="range"] {
+    width: 110px;
+  }
+
+  .editor-workspace {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 0;
+    width: 100%;
+  }
+
+  .editor-workspace > .canvas-frame {
+    width: min(100%, 460px, max(220px, calc(100dvh - 210px)));
+  }
+
+  .preview-area {
+    width: 86px;
+    margin-inline: auto;
+  }
+
+  .preview-area p {
+    margin-bottom: 4px;
+    font-size: 11px;
+  }
+
+  #toy-section {
+    padding: 16px;
+  }
+
+  .bottle-shelf {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    width: min(100%, 620px);
+    margin: 12px auto 6px;
+    padding-bottom: 8px;
+  }
+
+  .bottle-button {
+    min-height: 76px;
+    max-width: 57px;
+  }
+
+  .bottle-name,
+  .bottle-level {
+    font-size: 11px;
+  }
+
+  .scene-wrap {
+    max-width: min(460px, max(240px, calc(100dvh - 330px)));
+  }
+
+  .actions {
+    margin-top: 10px;
+  }
+}
+
+/* 가로 화면이 낮으면 불필요한 간격을 더 줄입니다. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .app-header p {
+    display: none;
+  }
+
+  .app-header {
+    margin-bottom: 8px;
+  }
+
+  .panel p {
+    margin-top: 5px;
+    margin-bottom: 8px;
+  }
+
+  .secondary-actions {
+    padding-top: 10px;
+    margin-top: 12px;
+  }
+}
+
+/* 세로 화면: 사진과 도구를 위아래로 배치 */
+@media (orientation: portrait) {
+  .app {
+    width: min(100%, 720px);
+  }
+
+  .editor-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-workspace > .canvas-frame {
+    width: min(100%, 480px);
+  }
+
+  .preview-area {
+    width: 110px;
+    margin-inline: auto;
+  }
+
+  .scene-wrap {
+    max-width: 480px;
+  }
+}
