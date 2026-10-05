@@ -21,11 +21,14 @@
       this.source = null;
       this.mask = null;
       this.maskCtx = null;
+      this.composite = null;
+      this.compositeCtx = null;
+      this.overlay = null;
+      this.overlayCtx = null;
 
       this.mode = "original";
       this.tool = "brush";
       this.hasTransparency = false;
-
       this.zoom = 1;
       this.offsetX = 0;
       this.offsetY = 0;
@@ -36,12 +39,23 @@
       this.loadVersion = 0;
       this.ready = false;
 
+      this.dirty = true;
+      this.renderRequest = null;
+      this.forcePreview = false;
+      this.lastPreviewTime = 0;
+
+      // チェック柄を毎回描き直さず、パターンとして再利用。
+      const tile = makeCanvas(40, 40);
+      const tileCtx = tile.getContext("2d");
+      tileCtx.fillStyle = "#ffffff";
+      tileCtx.fillRect(0, 0, 40, 40);
+      tileCtx.fillStyle = "#e8e3eb";
+      tileCtx.fillRect(0, 0, 20, 20);
+      tileCtx.fillRect(20, 20, 20, 20);
+      this.checker = this.ctx.createPattern(tile, "repeat");
+
       this.bindEvents();
       this.updateControls();
-    }
-
-    tell(message) {
-      $("status-message").textContent = message;
     }
 
     bindEvents() {
@@ -53,25 +67,23 @@
         this.setMode("selection");
       });
 
-      $("brush-button").addEventListener("click", () => {
-        this.setTool("brush");
-      });
+      for (const [id, tool] of [
+        ["brush-button", "brush"],
+        ["eraser-button", "eraser"],
+        ["pan-button", "pan"]
+      ]) {
+        $(id).addEventListener("click", () => {
+          if (this.pointer) return;
+          this.tool = tool;
+          this.updateControls();
+        });
+      }
 
-      $("eraser-button").addEventListener("click", () => {
-        this.setTool("eraser");
-      });
-
-      $("pan-button").addEventListener("click", () => {
-        this.setTool("pan");
-      });
-
-      $("undo-button").addEventListener("click", () => {
-        this.undo();
-      });
+      $("undo-button").addEventListener("click", () => this.undo());
 
       $("editor-zoom").addEventListener("input", (event) => {
         this.zoom = Number(event.target.value);
-        this.render();
+        this.queueRender(true);
       });
 
       $("reset-view-button").addEventListener("click", () => {
@@ -86,22 +98,23 @@
         this.onPointerMove(event);
       });
 
-      this.canvas.addEventListener("pointerup", (event) => {
-        this.finishPointer(event);
-      });
+      for (const name of [
+        "pointerup", "pointercancel", "lostpointercapture"
+      ]) {
+        this.canvas.addEventListener(name, (event) => {
+          this.finishPointer(event);
+        });
+      }
 
-      this.canvas.addEventListener("pointercancel", (event) => {
-        this.finishPointer(event);
-      });
+      window.addEventListener("blur", () => this.finishPointer());
 
-      this.canvas.addEventListener("lostpointercapture", (event) => {
-        this.finishPointer(event);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) this.finishPointer();
       });
     }
 
     async loadFile(file) {
       const version = ++this.loadVersion;
-
       if (!file) return false;
 
       if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
@@ -115,39 +128,38 @@
 
         await new Promise((resolve, reject) => {
           image.onload = resolve;
-          image.onerror = () => {
-            reject(new Error("사진을 읽지 못했어. 다른 사진을 선택해줘."));
-          };
+          image.onerror = () => reject(
+            new Error("사진을 읽지 못했어. 다른 사진을 선택해줘.")
+          );
           image.src = url;
         });
 
         if (version !== this.loadVersion) return false;
 
         /*
-         * 큰 사진은 편집용으로 축소합니다.
-         * 원본 파일 자체는 변경하지 않습니다.
+         * 편집용 사진은 긴 변 800픽셀 이하로 줄입니다.
+         * 원본 파일은 변경하지 않습니다.
          */
         const ratio = Math.min(
           1,
-          1000 / Math.max(image.naturalWidth, image.naturalHeight)
+          800 / Math.max(image.naturalWidth, image.naturalHeight)
         );
 
         const width = Math.max(
-          1,
-          Math.round(image.naturalWidth * ratio)
+          1, Math.round(image.naturalWidth * ratio)
         );
 
         const height = Math.max(
-          1,
-          Math.round(image.naturalHeight * ratio)
+          1, Math.round(image.naturalHeight * ratio)
         );
 
-        this.source = makeCanvas(width, height);
+        this.finishPointer();
+        this.history = [];
 
+        this.source = makeCanvas(width, height);
         const sourceCtx = this.source.getContext("2d", {
           willReadFrequently: true
         });
-
         sourceCtx.drawImage(image, 0, 0, width, height);
 
         const pixels = sourceCtx.getImageData(
@@ -171,12 +183,13 @@
         this.composite = makeCanvas(width, height);
         this.compositeCtx = this.composite.getContext("2d");
 
+        this.overlay = makeCanvas(width, height);
+        this.overlayCtx = this.overlay.getContext("2d");
+
         this.mode = "original";
         this.tool = "brush";
-        this.history = [];
-        this.pointer = null;
-        this.lastPoint = null;
         this.ready = true;
+        this.dirty = true;
 
         this.resetView();
         this.updateControls();
@@ -188,23 +201,13 @@
     }
 
     setMode(mode) {
-      if (!this.ready || this.pointer) return;
-      if (mode === this.mode) return;
+      if (!this.ready || this.pointer || mode === this.mode) return;
 
       this.mode = mode;
       this.tool = "brush";
+      this.dirty = true;
 
-      /*
-       * 모드를 바꿔도 기존에 칠한 영역은 보관합니다.
-       * 새 사진을 선택하면 선택 영역이 초기화됩니다.
-       */
       this.resetView();
-      this.updateControls();
-    }
-
-    setTool(tool) {
-      if (this.pointer) return;
-      this.tool = tool;
       this.updateControls();
     }
 
@@ -213,32 +216,27 @@
       this.offsetX = 0;
       this.offsetY = 0;
       $("editor-zoom").value = "1";
-      this.render();
+      this.queueRender(true);
     }
 
     updateControls() {
       $("editor-tools").hidden = this.mode !== "selection";
 
       $("use-original-button").setAttribute(
-        "aria-pressed",
-        String(this.mode === "original")
+        "aria-pressed", String(this.mode === "original")
       );
 
       $("select-region-button").setAttribute(
-        "aria-pressed",
-        String(this.mode === "selection")
+        "aria-pressed", String(this.mode === "selection")
       );
 
-      const tools = {
+      for (const [tool, id] of Object.entries({
         brush: "brush-button",
         eraser: "eraser-button",
         pan: "pan-button"
-      };
-
-      for (const [tool, id] of Object.entries(tools)) {
+      })) {
         $(id).setAttribute(
-          "aria-pressed",
-          String(this.tool === tool)
+          "aria-pressed", String(this.tool === tool)
         );
       }
 
@@ -251,13 +249,10 @@
 
       $("editor-help").textContent =
         this.mode === "selection"
-          ? "残す".replace(
-              "残す",
-              "남길 부분을 칠해줘. 색 표시 밖은 투명해져. 확대 후 화면 이동으로 위치를 조절할 수 있어."
-            )
+          ? "남길 부분을 칠해줘. 확대 후 ‘화면 이동’으로 위치를 조절할 수 있어."
           : this.hasTransparency
-            ? "투명 배경을 유지해요. 드래그로 위치를, 확대 슬라이더로 크기를 조절해줘."
-            : "정사각형 틀에 들어갈 부분을 골라줘. 드래그로 위치를, 확대 슬라이더로 크기를 조절할 수 있어.";
+            ? "투명 배경을 유지해요. 드래그로 위치를 조절해줘."
+            : "정사각형 안에 들어갈 부분을 골라줘. 드래그로 위치를 조절할 수 있어.";
     }
 
     getTransform() {
@@ -310,11 +305,8 @@
         )
       );
 
-      // メモリではなく、編集履歴の上限です。
-      // 最後の8回分まで戻せます。
-      if (this.history.length > 8) {
-        this.history.shift();
-      }
+      // 메모리 부담을 줄이기 위해 최근 6회만 보관합니다.
+      if (this.history.length > 6) this.history.shift();
 
       this.updateControls();
     }
@@ -323,8 +315,10 @@
       if (!this.history.length || this.pointer) return;
 
       this.maskCtx.putImageData(this.history.pop(), 0, 0);
+      this.dirty = true;
+
       this.updateControls();
-      this.render();
+      this.queueRender(true);
     }
 
     onPointerDown(event) {
@@ -351,6 +345,8 @@
         this.lastPoint = this.toSourcePoint(point);
         this.paint(this.lastPoint, this.lastPoint);
       }
+
+      this.queueRender();
     }
 
     onPointerMove(event) {
@@ -370,31 +366,33 @@
         this.lastPoint = sourcePoint;
       }
 
-      this.render();
+      // 이동 이벤트마다 즉시 그리지 않고 다음 화면 갱신에 합칩니다.
+      this.queueRender();
     }
 
     finishPointer(event) {
-      if (!this.pointer || event.pointerId !== this.pointer.id) return;
+      if (!this.pointer) return;
+      if (event && event.pointerId !== this.pointer.id) return;
+
+      const id = this.pointer.id;
 
       this.pointer = null;
       this.lastPoint = null;
 
-      if (this.canvas.hasPointerCapture(event.pointerId)) {
-        this.canvas.releasePointerCapture(event.pointerId);
+      if (this.canvas.hasPointerCapture(id)) {
+        this.canvas.releasePointerCapture(id);
       }
 
-      this.render();
+      this.queueRender(true);
     }
 
     paint(from, to) {
-      const transform = this.getTransform();
       const radius = Number($("brush-size").value) /
-        transform.scale / 2;
+        this.getTransform().scale / 2;
 
       const ctx = this.maskCtx;
 
       ctx.save();
-
       ctx.globalCompositeOperation =
         this.pointer.action === "eraser"
           ? "destination-out"
@@ -404,7 +402,6 @@
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = radius * 2;
       ctx.lineCap = "round";
-      ctx.lineJoin = "round";
 
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
@@ -416,17 +413,17 @@
       ctx.fill();
 
       ctx.restore();
-
-      this.render();
+      this.dirty = true;
     }
 
     getComposite() {
+      if (!this.dirty) return this.composite;
+
       const ctx = this.compositeCtx;
+      const width = this.source.width;
+      const height = this.source.height;
 
-      ctx.clearRect(
-        0, 0, this.composite.width, this.composite.height
-      );
-
+      ctx.clearRect(0, 0, width, height);
       ctx.drawImage(this.source, 0, 0);
 
       if (this.mode === "selection") {
@@ -436,36 +433,101 @@
         ctx.restore();
       }
 
+      // 선택 표시도 새 캔버스 없이 기존 캔버스를 재사용합니다.
+      const overlay = this.overlayCtx;
+
+      overlay.clearRect(0, 0, width, height);
+      overlay.fillStyle = "rgba(165, 91, 220, 0.32)";
+      overlay.fillRect(0, 0, width, height);
+
+      overlay.save();
+      overlay.globalCompositeOperation = "destination-in";
+      overlay.drawImage(this.composite, 0, 0);
+      overlay.restore();
+
+      this.dirty = false;
       return this.composite;
     }
 
-    drawCheckerboard(ctx, width, height) {
-      const cell = 20;
+    queueRender(forcePreview = false) {
+      this.forcePreview = this.forcePreview || forcePreview;
 
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
+      if (this.renderRequest !== null) return;
 
-      ctx.fillStyle = "#e8e3eb";
+      this.renderRequest = requestAnimationFrame((now) => {
+        this.renderRequest = null;
 
-      for (let y = 0; y < height; y += cell) {
-        for (let x = 0; x < width; x += cell) {
-          if ((x / cell + y / cell) % 2 === 0) {
-            ctx.fillRect(x, y, cell, cell);
-          }
-        }
+        const updatePreview =
+          this.forcePreview || now - this.lastPreviewTime >= 100;
+
+        this.forcePreview = false;
+        this.render(updatePreview);
+
+        if (updatePreview) this.lastPreviewTime = now;
+      });
+    }
+
+    render(updatePreview = true) {
+      if (!this.ready) return;
+
+      const ctx = this.ctx;
+      const size = this.canvas.width;
+      const transform = this.getTransform();
+      const composite = this.getComposite();
+
+      const width = this.source.width * transform.scale;
+      const height = this.source.height * transform.scale;
+
+      ctx.fillStyle = this.checker;
+      ctx.fillRect(0, 0, size, size);
+
+      if (this.mode === "selection") {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(
+          this.source, transform.x, transform.y, width, height
+        );
+        ctx.restore();
+
+        ctx.drawImage(
+          composite, transform.x, transform.y, width, height
+        );
+
+        ctx.drawImage(
+          this.overlay, transform.x, transform.y, width, height
+        );
+      } else {
+        ctx.drawImage(
+          this.source, transform.x, transform.y, width, height
+        );
+      }
+
+      if (updatePreview) {
+        const preview = this.previewCtx;
+
+        preview.clearRect(
+          0, 0, this.preview.width, this.preview.height
+        );
+
+        preview.save();
+        preview.scale(
+          this.preview.width / size,
+          this.preview.height / size
+        );
+
+        preview.drawImage(
+          composite, transform.x, transform.y, width, height
+        );
+
+        preview.restore();
       }
     }
 
-    /*
-     * 현재 보이는 정사각형 영역을 투명 캔버스로 만듭니다.
-     * 선택 영역과 원본 사진의 투명도가 함께 적용됩니다.
-     */
     makeVisibleCanvas() {
       const result = makeCanvas(600, 600);
-      const ctx = result.getContext("2d");
       const transform = this.getTransform();
 
-      ctx.drawImage(
+      result.getContext("2d").drawImage(
         this.getComposite(),
         transform.x,
         transform.y,
@@ -476,87 +538,10 @@
       return result;
     }
 
-    render() {
-      if (!this.ready) return;
-
-      const ctx = this.ctx;
-      const size = this.canvas.width;
-      const transform = this.getTransform();
-
-      this.drawCheckerboard(ctx, size, size);
-
-      if (this.mode === "selection") {
-        ctx.save();
-        ctx.globalAlpha = 0.3;
-        ctx.drawImage(
-          this.source,
-          transform.x,
-          transform.y,
-          this.source.width * transform.scale,
-          this.source.height * transform.scale
-        );
-        ctx.restore();
-
-        const selected = this.getComposite();
-
-        ctx.drawImage(
-          selected,
-          transform.x,
-          transform.y,
-          this.source.width * transform.scale,
-          this.source.height * transform.scale
-        );
-
-        /*
-         * 選択した領域の色表示。
-         * 元画像の透明部分には色を付けません。
-         */
-        const overlay = this.compositeCtx;
-        overlay.save();
-        overlay.globalCompositeOperation = "source-atop";
-        overlay.fillStyle = "rgba(165, 91, 220, 0.32)";
-        overlay.fillRect(
-          0, 0, this.composite.width, this.composite.height
-        );
-        overlay.restore();
-
-        ctx.drawImage(
-          this.composite,
-          transform.x,
-          transform.y,
-          this.source.width * transform.scale,
-          this.source.height * transform.scale
-        );
-      } else {
-        ctx.drawImage(
-          this.source,
-          transform.x,
-          transform.y,
-          this.source.width * transform.scale,
-          this.source.height * transform.scale
-        );
-      }
-
-      this.previewCtx.clearRect(
-        0, 0, this.preview.width, this.preview.height
-      );
-
-      this.previewCtx.drawImage(
-        this.makeVisibleCanvas(),
-        0, 0,
-        this.preview.width,
-        this.preview.height
-      );
-    }
-
-    /*
-     * app.js에서 호출할 함수.
-     * 결과는 HTMLCanvasElement입니다.
-     */
     exportImage() {
-      if (!this.ready) {
-        throw new Error("먼저 사진을 선택해줘.");
-      }
+      if (!this.ready) throw new Error("먼저 사진을 선택해줘.");
+
+      this.finishPointer();
 
       const visible = this.makeVisibleCanvas();
       const ctx = visible.getContext("2d", {
@@ -574,14 +559,12 @@
 
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          const alpha = pixels[(y * width + x) * 4 + 3];
+          if (pixels[(y * width + x) * 4 + 3] <= 8) continue;
 
-          if (alpha > 8) {
-            left = Math.min(left, x);
-            top = Math.min(top, y);
-            right = Math.max(right, x);
-            bottom = Math.max(bottom, y);
-          }
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
         }
       }
 
@@ -593,10 +576,6 @@
         );
       }
 
-      /*
-       * 일반 사진을 그대로 쓰면 정사각형 유지.
-       * 오린 사진과 투명 사진은 빈 여백만 잘라냅니다.
-       */
       if (this.mode === "original" && !this.hasTransparency) {
         return visible;
       }
@@ -608,10 +587,8 @@
 
       cropped.getContext("2d").drawImage(
         visible,
-        left, top,
-        cropped.width, cropped.height,
-        0, 0,
-        cropped.width, cropped.height
+        left, top, cropped.width, cropped.height,
+        0, 0, cropped.width, cropped.height
       );
 
       return cropped;
