@@ -1,1 +1,525 @@
 
+/* ── 기본 색상 ── */
+:root {
+  --background: #f4ecfa;
+  --panel: #fffaf5;
+  --ink: #382743;
+  --muted: #786682;
+  --purple: #7850a3;
+  --purple-dark: #593779;
+  --orange: #f49a45;
+  --border: #e2d4ea;
+  --radius: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--background);
+  color: var(--ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+.button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 650;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition:
+    background 0.15s,
+    transform 0.15s,
+    opacity 0.15s;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button:active:not(:disabled),
+.button:active {
+  transform: translateY(2px);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
+button.primary,
+.button.primary {
+  border-color: var(--purple);
+  background: var(--purple);
+  color: #ffffff;
+}
+
+button[aria-pressed="true"] {
+  border-color: var(--purple);
+  background: #eee2f8;
+  color: var(--purple-dark);
+}
+
+@media (hover: hover) {
+  button:hover:not(:disabled),
+  .button:hover {
+    background: #f5edf9;
+  }
+
+  button.primary:hover:not(:disabled),
+  .button.primary:hover {
+    background: var(--purple-dark);
+  }
+}
+
+/* ── 페이지 구성 ── */
+.app {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    18px
+    max(32px, env(safe-area-inset-bottom));
+}
+
+.app-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(28px, 6vw, 40px);
+  letter-spacing: -0.04em;
+}
+
+.app-header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.panel {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  text-align: center;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 21px;
+  letter-spacing: -0.03em;
+}
+
+.panel p {
+  margin: 8px 0 18px;
+}
+
+.small,
+#editor-help,
+#stage-help {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#upload-section {
+  padding-top: 42px;
+  padding-bottom: 32px;
+}
+
+#upload-section .small {
+  margin-top: 22px;
+  margin-bottom: 0;
+}
+
+/* ── 공통 버튼 줄 ── */
+.toolbar,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.toolbar {
+  margin: 14px 0;
+}
+
+.toolbar label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.actions {
+  margin-top: 18px;
+}
+
+.secondary-actions {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.secondary-actions button {
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+input[type="range"] {
+  width: 130px;
+  max-width: 100%;
+  min-height: 36px;
+  accent-color: var(--purple);
+  cursor: pointer;
+}
+
+/* ── 사진 편집 화면 ── */
+.editor-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: start;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.canvas-frame {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #e9deef;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+#editor-canvas,
+#scene-canvas {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#editor-canvas {
+  cursor: crosshair;
+}
+
+.preview-area p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.checkerboard {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #e8e3eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e8e3eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e8e3eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e8e3eb 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+/* ── 재료 선반 ── */
+.bottle-shelf {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 22px 0 8px;
+  padding: 0 4px 16px;
+  border-bottom: 10px solid #b18b73;
+  border-radius: 0 0 8px 8px;
+}
+
+.bottle-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.bottle-button {
+  position: relative;
+  width: 100%;
+  max-width: 82px;
+  min-height: 100px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  touch-action: none;
+  cursor: grab;
+}
+
+.bottle-button:active:not(:disabled) {
+  transform: none;
+  cursor: grabbing;
+}
+
+.bottle-button canvas {
+  width: 100%;
+  pointer-events: none;
+}
+
+.bottle-button.is-dragging {
+  opacity: 0.25;
+}
+
+.bottle-name {
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.bottle-level {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.part-color-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.color-dot {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgb(56 39 67 / 20%);
+  border-radius: 50%;
+}
+
+/* 드래그 중인 병은 app.js에서 이 요소로 표시 */
+.drag-bottle {
+  position: fixed;
+  z-index: 100;
+  width: 76px;
+  height: 106px;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+/* ── 별·하트 색 선택 ── */
+.color-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #f1e6fa;
+}
+
+.color-panel h3 {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.color-panel label {
+  font-size: 12px;
+}
+
+#color-preview {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #f5d65c;
+}
+
+/* ── 솥 화면과 붓기 게이지 ── */
+.scene-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+#scene-canvas {
+  border-radius: 18px;
+}
+
+.pour-gauge {
+  position: fixed;
+  z-index: 110;
+  width: 116px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgb(255 250 245 / 96%);
+  box-shadow: 0 3px 14px rgb(56 39 67 / 12%);
+  pointer-events: none;
+}
+
+.gauge-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #e9deef;
+}
+
+.gauge-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f49a45, #9152c7);
+  transition: width 0.1s linear;
+}
+
+#gauge-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ── 결과 저장 ── */
+#export-status {
+  margin-top: 20px;
+}
+
+#export-message {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#export-progress {
+  width: min(100%, 320px);
+  height: 12px;
+  accent-color: var(--purple);
+}
+
+#gif-result {
+  margin-top: 20px;
+}
+
+#gif-preview {
+  display: block;
+  width: min(100%, 320px);
+  height: auto;
+  margin: 0 auto 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+#status-message {
+  min-height: 24px;
+  margin: 16px 0 0;
+  color: var(--purple-dark);
+  font-size: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ── 작은 화면 ── */
+@media (max-width: 560px) {
+  .app {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .panel {
+    padding: 18px 12px;
+  }
+
+  .panel h2 {
+    font-size: 19px;
+  }
+
+  .editor-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview-area {
+    width: 140px;
+    margin: 0 auto;
+  }
+
+  .bottle-shelf {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .bottle-button {
+    max-width: 72px;
+    min-height: 92px;
+  }
+
+  .actions button {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .toolbar {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .button,
+  .gauge-fill {
+    transition: none;
+  }
+}
